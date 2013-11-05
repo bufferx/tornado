@@ -219,7 +219,7 @@ class RequestHandler(object):
         # headers we generate on the server side, so use a plain dict
         # and list instead.
         self._headers = {
-            "Server": "TornadoServer/%s" % tornado.version,
+            "Server": tornado.SERVER_NAME,
             "Content-Type": "text/html; charset=UTF-8",
         }
         self._list_headers = []
