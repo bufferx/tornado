@@ -317,7 +317,8 @@ class _HTTPConnection(object):
         try:
             yield
         except Exception, e:
-            logging.warning("uncaught exception", exc_info=True)
+            logging.warning("uncaught exception\t%s", e, exc_info=True if
+                    __debug__ else False)
             self._run_callback(HTTPResponse(self.request, 599, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
