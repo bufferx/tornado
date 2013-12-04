@@ -33,6 +33,9 @@ except ImportError:
 
 _DEFAULT_CA_CERTS = os.path.dirname(__file__) + '/ca-certificates.crt'
 
+NETWORK_ERROR_CONNECT_TIMEOUT = 522
+NETWORK_ERROR_REQUEST_TIMEOUT = 524
+
 
 class SimpleAsyncHTTPClient(AsyncHTTPClient):
     """Non-blocking HTTP client with no external dependencies.
@@ -224,10 +227,10 @@ class _HTTPConnection(object):
                                 functools.partial(self._on_connect, parsed,
                                                   parsed_hostname))
 
-    def _on_timeout(self):
+    def _on_timeout(self, status_code=NETWORK_ERROR_CONNECT_TIMEOUT):
         self._timeout = None
         if self.final_callback is not None:
-            raise HTTPError(599, "Timeout")
+            raise HTTPError(status_code, "Timeout")
 
     def _on_connect(self, parsed, parsed_hostname):
         if self._timeout is not None:
@@ -236,7 +239,8 @@ class _HTTPConnection(object):
         if self.request.request_timeout:
             self._timeout = self.io_loop.add_timeout(
                 self.start_time + self.request.request_timeout,
-                stack_context.wrap(self._on_timeout))
+                stack_context.wrap(functools.partial(self._on_timeout,
+                    status_code=NETWORK_ERROR_REQUEST_TIMEOUT)))
         if (self.request.validate_cert and
             isinstance(self.stream, SSLIOStream)):
             match_hostname(self.stream.socket.getpeercert(),
@@ -319,9 +323,15 @@ class _HTTPConnection(object):
         except Exception, e:
             logging.warning("uncaught exception\t%s", e, exc_info=True if
                     __debug__ else False)
-            self._run_callback(HTTPResponse(self.request, 599, error=e,
+
+            _code = 599
+            if isinstance(e, HTTPError):
+                _code = e.code
+
+            self._run_callback(HTTPResponse(self.request, _code, error=e,
                                 request_time=time.time() - self.start_time,
                                 ))
+
             if hasattr(self, "stream"):
                 self.stream.close()
 
