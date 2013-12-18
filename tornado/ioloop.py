@@ -120,6 +120,7 @@ class IOLoop(object):
         self._stopped = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
+        self._loop_log_threshold = 2.0
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -239,6 +240,11 @@ class IOLoop(object):
         """
         self.set_blocking_signal_threshold(seconds, self.log_stack)
 
+    def set_loop_log_threshold(self, seconds):
+        """Set the threshold for the log of LOOP's execution time
+        """
+        self._loop_log_threshold = seconds
+
     def log_stack(self, signal, frame):
         """Signal handler to log the stack trace of the current thread.
 
@@ -259,7 +265,12 @@ class IOLoop(object):
             return
         self._thread_ident = thread.get_ident()
         self._running = True
+        _loop_count   = 0
+
         while True:
+            _loop_count  += 1
+            _start_time  = time.time()
+
             poll_timeout = 3600.0
 
             # Prevent IO event starvation by delaying new callbacks
@@ -270,8 +281,12 @@ class IOLoop(object):
             for callback in callbacks:
                 self._run_callback(callback)
 
+            _end_time = time.time()
+            _diff_time_cb = _end_time - _start_time
+
+            _diff_time_timeout = -1
             if self._timeouts:
-                now = time.time()
+                now = _end_time
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -283,6 +298,8 @@ class IOLoop(object):
                         seconds = self._timeouts[0].deadline - now
                         poll_timeout = min(seconds, poll_timeout)
                         break
+                _end_time = time.time()
+                _diff_time_timeout = _end_time - now
 
             if self._callbacks:
                 # If any callbacks or timeouts called add_callback,
@@ -298,7 +315,13 @@ class IOLoop(object):
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
             try:
+                now = _end_time
+                _diff_time_poll = -1
+
                 event_pairs = self._impl.poll(poll_timeout)
+
+                _end_time = time.time()
+                _diff_time_poll = _end_time - now
             except Exception, e:
                 # Depending on python version and IOLoop implementation,
                 # different exception types may be thrown and there are
@@ -320,6 +343,9 @@ class IOLoop(object):
             # its handler. Since that handler may perform actions on
             # other file descriptors, there may be reentrant calls to
             # this IOLoop that update self._events
+            now = _end_time
+            _diff_time_events = -1
+
             self._events.update(event_pairs)
             while self._events:
                 fd, events = self._events.popitem()
@@ -335,6 +361,17 @@ class IOLoop(object):
                 except Exception:
                     logging.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
+
+            _end_time = time.time()
+            _diff_time_events = _end_time - now
+
+            _diff_time = _end_time - _start_time
+            if _diff_time > self._loop_log_threshold:
+                logging.info('%d\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f',
+                        _loop_count, _diff_time,
+                        poll_timeout, _diff_time_cb, _diff_time_timeout,
+                        _diff_time_poll, _diff_time_events)
+
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
         if self._blocking_signal_threshold is not None:
