@@ -143,7 +143,8 @@ class HTTPServer(TCPServer):
 
     def handle_stream(self, stream, address):
         HTTPConnection(stream, address, self.request_callback,
-                       self.no_keep_alive, self.xheaders)
+                       self.no_keep_alive, self.xheaders,
+                       self.io_loop)
 
 
 class _BadRequestException(Exception):
@@ -157,13 +158,23 @@ class HTTPConnection(object):
     We parse HTTP headers and bodies, and execute the request callback
     until the HTTP conection is closed.
     """
+
+    @property
+    def sequence(self):
+        return self._ioloop.sequence
+
     def __init__(self, stream, address, request_callback, no_keep_alive=False,
-                 xheaders=False):
+                 xheaders=False, ioloop=None):
+        assert ioloop is not None
+
+        self._start_time = time.time()
         self.stream = stream
         self.address = address
         self.request_callback = request_callback
         self.no_keep_alive = no_keep_alive
         self.xheaders = xheaders
+        self._ioloop  = ioloop
+        self.init_sequence = ioloop.sequence
         self._request = None
         self._request_finished = False
         # Save stack context here, outside of any request.  This keeps
@@ -230,6 +241,9 @@ class HTTPConnection(object):
 
     def _on_headers(self, data):
         try:
+            if __debug__:
+                logging.info(data)
+
             data = native_str(data.decode('latin1'))
             eol = data.find("\r\n")
             start_line = data[:eol]
@@ -361,6 +375,8 @@ class HTTPRequest(object):
         self.version = version
         self.headers = headers or httputil.HTTPHeaders()
         self.body = body or ""
+        self.init_sequence = connection.sequence
+        self.finish_sequence = None
         if connection and connection.xheaders:
             # Squid uses X-Forwarded-For, others use X-Real-Ip
             self.remote_ip = self.headers.get(
@@ -419,12 +435,22 @@ class HTTPRequest(object):
 
     def finish(self):
         """Finishes this HTTP request on the open connection."""
+        self.finish_sequence = self.connection.sequence
         self.connection.finish()
         self._finish_time = time.time()
 
     def full_url(self):
         """Reconstructs the full URL for this request."""
         return self.protocol + "://" + self.host + self.uri
+
+    def get_ttl(self):
+        """Time To live
+        Returns the amount of time it took for the request to execute from
+        the connection is established."""
+        if self._finish_time is None:
+            return time.time() - self.connection._start_time
+        else:
+            return self._finish_time - self.connection._start_time
 
     def request_time(self):
         """Returns the amount of time it took for this request to execute."""

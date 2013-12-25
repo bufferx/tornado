@@ -107,6 +107,10 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
+    @property
+    def sequence(self):
+        return self._loop_sequence
+
     def __init__(self, impl=None):
         self._impl = impl or _poll()
         if hasattr(self._impl, 'fileno'):
@@ -120,7 +124,8 @@ class IOLoop(object):
         self._stopped = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
-        self._loop_log_threshold = 2.0
+        self._loop_log_threshold = 0.2
+        self._loop_sequence = 0
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -265,10 +270,10 @@ class IOLoop(object):
             return
         self._thread_ident = thread.get_ident()
         self._running = True
-        _loop_count   = 0
+        self._loop_sequence   = 0
 
         while True:
-            _loop_count  += 1
+            self._loop_sequence  += 1
             _start_time  = time.time()
 
             poll_timeout = 3600.0
@@ -368,8 +373,9 @@ class IOLoop(object):
             _diff_time = _end_time - _start_time
             if _diff_time > self._loop_log_threshold:
                 logging.info('%d\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f',
-                        _loop_count, _diff_time,
-                        poll_timeout, _diff_time_cb, _diff_time_timeout,
+                        self._loop_sequence,
+                        _diff_time, poll_timeout,
+                        _diff_time_cb, _diff_time_timeout,
                         _diff_time_poll, _diff_time_events)
 
         # reset the stopped flag so another start/stop pair can be issued

@@ -249,6 +249,14 @@ class RequestHandler(object):
         """Returns the status code for our response."""
         return self._status_code
 
+    def get_sequence(self):
+        return '%s %s %s' % (self.request.connection.init_sequence,
+                self.request.init_sequence,
+                self.request.finish_sequence)
+
+    def get_ttl(self):
+        return self.request.get_ttl()
+
     def set_header(self, name, value):
         """Sets the given response header name and value.
 
@@ -1448,7 +1456,8 @@ class Application(object):
         else:
             log_method = logging.error
         request_time = 1000.0 * handler.request.request_time()
-        log_method("%d %s %.2fms", handler.get_status(),
+        log_method("%s %d %s %.2fms", handler.get_sequence(),
+                   handler.get_status(),
                    handler._request_summary(), request_time)
 
 
