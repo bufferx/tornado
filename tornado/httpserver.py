@@ -241,9 +241,6 @@ class HTTPConnection(object):
 
     def _on_headers(self, data):
         try:
-            if __debug__:
-                logging.info(data)
-
             data = native_str(data.decode('latin1'))
             eol = data.find("\r\n")
             start_line = data[:eol]
@@ -292,6 +289,7 @@ class HTTPConnection(object):
             httputil.parse_body_arguments(
                 self._request.headers.get("Content-Type", ""), data,
                 self._request.arguments, self._request.files)
+
         self.request_callback(self._request)
 
 
@@ -443,21 +441,19 @@ class HTTPRequest(object):
         """Reconstructs the full URL for this request."""
         return self.protocol + "://" + self.host + self.uri
 
-    def get_ttl(self):
-        """Time To live
-        Returns the amount of time it took for the request to execute from
-        the connection is established."""
-        if self._finish_time is None:
-            return time.time() - self.connection._start_time
-        else:
-            return self._finish_time - self.connection._start_time
-
-    def request_time(self):
+    def request_time(self, handler_time):
         """Returns the amount of time it took for this request to execute."""
         if self._finish_time is None:
-            return time.time() - self._start_time
-        else:
-            return self._finish_time - self._start_time
+            now = time.time()
+            return (now - self.connection._start_time,
+                    now - self._start_time,
+                    now - handler_time,
+                    )
+
+        return (self._finish_time - self.connection._start_time,
+                self._finish_time - self._start_time,
+                self._finish_time - handler_time,
+                )
 
     def get_ssl_certificate(self, binary_form=False):
         """Returns the client's SSL certificate, if any.

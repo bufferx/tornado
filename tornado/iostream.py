@@ -148,6 +148,9 @@ class IOStream(object):
 
     def read_until(self, delimiter, callback):
         """Call callback when we read the given delimiter."""
+        if __debug__:
+            logging.info(self.io_loop.sequence)
+
         self._set_read_callback(callback)
         self._read_delimiter = delimiter
         self._try_inline_read()

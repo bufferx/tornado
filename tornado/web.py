@@ -107,6 +107,7 @@ class RequestHandler(object):
     def __init__(self, application, request, **kwargs):
         super(RequestHandler, self).__init__()
 
+        self._start_time = time.time()
         self.application = application
         self.request = request
         self._headers_written = False
@@ -249,13 +250,19 @@ class RequestHandler(object):
         """Returns the status code for our response."""
         return self._status_code
 
-    def get_sequence(self):
-        return '%s %s %s' % (self.request.connection.init_sequence,
-                self.request.init_sequence,
-                self.request.finish_sequence)
+    def get_sequences(self):
+        if not hasattr(self, '_sequences'):
+            self._sequences = '%s %s %s' % (
+                    self.request.connection.init_sequence,
+                    self.request.init_sequence,
+                    self.request.finish_sequence)
 
-    def get_ttl(self):
-        return self.request.get_ttl()
+        return self._sequences
+
+    def get_time_summary(self):
+        return ' '.join(
+                ['%.3f' % rt for rt in
+                    self.request.request_time(self._start_time)])
 
     def set_header(self, name, value):
         """Sets the given response header name and value.
@@ -1064,8 +1071,8 @@ class RequestHandler(object):
         self.application.log_request(self)
 
     def _request_summary(self):
-        return self.request.method + " " + self.request.uri + \
-            " (" + self.request.remote_ip + ")"
+        return '%s %s (%s)' % (self.request.method, self.request.uri,
+                self.request.remote_ip)
 
     def _handle_request_exception(self, e):
         if isinstance(e, HTTPError):
@@ -1423,6 +1430,7 @@ class Application(object):
             StaticFileHandler.reset()
 
         handler._execute(transforms, *args, **kwargs)
+
         return handler
 
     def reverse_url(self, name, *args):
@@ -1455,10 +1463,12 @@ class Application(object):
             log_method = logging.warning
         else:
             log_method = logging.error
-        request_time = 1000.0 * handler.request.request_time()
-        log_method("%s %d %s %.2fms", handler.get_sequence(),
-                   handler.get_status(),
-                   handler._request_summary(), request_time)
+
+        log_method("%s %d %s %s",
+                handler.get_sequences(),
+                handler.get_status(),
+                handler._request_summary(),
+                handler.get_time_summary())
 
 
 class HTTPError(Exception):

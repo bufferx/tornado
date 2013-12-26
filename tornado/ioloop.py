@@ -107,9 +107,12 @@ class IOLoop(object):
     # Global lock for creating global IOLoop instance
     _instance_lock = threading.Lock()
 
+    # MAX SEQUENCE ID
+    SEQ_MAX_ID = 2 ** 32
+
     @property
     def sequence(self):
-        return self._loop_sequence
+        return 'sq-%d:%d' % (self._loop_sequence, self._cb_sequence)
 
     def __init__(self, impl=None):
         self._impl = impl or _poll()
@@ -124,8 +127,9 @@ class IOLoop(object):
         self._stopped = False
         self._thread_ident = None
         self._blocking_signal_threshold = None
-        self._loop_log_threshold = 0.2
+        self._loop_log_threshold = 1.0
         self._loop_sequence = 0
+        self._cb_sequence = 0
 
         # Create a pipe that we send bogus data to when we want to wake
         # the I/O loop when it is idle
@@ -259,6 +263,11 @@ class IOLoop(object):
                         self._blocking_signal_threshold,
                         ''.join(traceback.format_stack(frame)))
 
+    def _seq_incr(self):
+        if self._loop_sequence > IOLoop.SEQ_MAX_ID:
+            self._loop_sequence = 0
+        self._loop_sequence  += 1
+
     def start(self):
         """Starts the I/O loop.
 
@@ -268,13 +277,16 @@ class IOLoop(object):
         if self._stopped:
             self._stopped = False
             return
+
         self._thread_ident = thread.get_ident()
         self._running = True
-        self._loop_sequence   = 0
+        self._loop_sequence = 0
 
         while True:
-            self._loop_sequence  += 1
+            self._seq_incr()
             _start_time  = time.time()
+            _cb_st       = []
+            self._cb_sequence = 0
 
             poll_timeout = 3600.0
 
@@ -284,7 +296,12 @@ class IOLoop(object):
                 callbacks = self._callbacks
                 self._callbacks = []
             for callback in callbacks:
+                self._cb_sequence += 1
+                _st = time.time()
+
                 self._run_callback(callback)
+
+                _cb_st.append(time.time() - _st)
 
             _end_time = time.time()
             _diff_time_cb = _end_time - _start_time
@@ -377,6 +394,10 @@ class IOLoop(object):
                         _diff_time, poll_timeout,
                         _diff_time_cb, _diff_time_timeout,
                         _diff_time_poll, _diff_time_events)
+                logging.info('%d\t%.3f\t%s', \
+                        len(_cb_st),\
+                        sum(_cb_st),\
+                        '\t'.join(['%d:%.3f' % (idx, st) for idx, st in enumerate(_cb_st)]))
 
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
