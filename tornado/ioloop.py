@@ -280,14 +280,8 @@ class IOLoop(object):
 
         self._thread_ident = thread.get_ident()
         self._running = True
-        self._loop_sequence = 0
 
         while True:
-            self._seq_incr()
-            _start_time  = time.time()
-            _cb_st       = []
-            self._cb_sequence = 0
-
             poll_timeout = 3600.0
 
             # Prevent IO event starvation by delaying new callbacks
@@ -296,19 +290,9 @@ class IOLoop(object):
                 callbacks = self._callbacks
                 self._callbacks = []
             for callback in callbacks:
-                self._cb_sequence += 1
-                _st = time.time()
-
                 self._run_callback(callback)
 
-                _cb_st.append(time.time() - _st)
-
-            _end_time = time.time()
-            _diff_time_cb = _end_time - _start_time
-
-            _diff_time_timeout = -1
             if self._timeouts:
-                now = _end_time
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
@@ -320,8 +304,6 @@ class IOLoop(object):
                         seconds = self._timeouts[0].deadline - now
                         poll_timeout = min(seconds, poll_timeout)
                         break
-                _end_time = time.time()
-                _diff_time_timeout = _end_time - now
 
             if self._callbacks:
                 # If any callbacks or timeouts called add_callback,
@@ -337,13 +319,7 @@ class IOLoop(object):
                 signal.setitimer(signal.ITIMER_REAL, 0, 0)
 
             try:
-                now = _end_time
-                _diff_time_poll = -1
-
                 event_pairs = self._impl.poll(poll_timeout)
-
-                _end_time = time.time()
-                _diff_time_poll = _end_time - now
             except Exception, e:
                 # Depending on python version and IOLoop implementation,
                 # different exception types may be thrown and there are
@@ -365,8 +341,6 @@ class IOLoop(object):
             # its handler. Since that handler may perform actions on
             # other file descriptors, there may be reentrant calls to
             # this IOLoop that update self._events
-            now = _end_time
-            _diff_time_events = -1
 
             self._events.update(event_pairs)
             while self._events:
@@ -383,21 +357,6 @@ class IOLoop(object):
                 except Exception:
                     logging.error("Exception in I/O handler for fd %s",
                                   fd, exc_info=True)
-
-            _end_time = time.time()
-            _diff_time_events = _end_time - now
-
-            _diff_time = _end_time - _start_time
-            if _diff_time > self._loop_log_threshold:
-                logging.info('%d\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f',
-                        self._loop_sequence,
-                        _diff_time, poll_timeout,
-                        _diff_time_cb, _diff_time_timeout,
-                        _diff_time_poll, _diff_time_events)
-                logging.info('%d\t%.3f\t%s', \
-                        len(_cb_st),\
-                        sum(_cb_st),\
-                        '\t'.join(['%d:%.3f' % (idx, st) for idx, st in enumerate(_cb_st)]))
 
         # reset the stopped flag so another start/stop pair can be issued
         self._stopped = False
