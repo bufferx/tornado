@@ -293,6 +293,7 @@ class IOLoop(object):
                 self._run_callback(callback)
 
             if self._timeouts:
+                now = time.time()
                 while self._timeouts:
                     if self._timeouts[0].callback is None:
                         # the timeout was cancelled
