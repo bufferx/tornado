@@ -82,12 +82,14 @@ class IOStream(object):
 
     """
     def __init__(self, socket, io_loop=None, max_buffer_size=104857600,
-                 read_chunk_size=4096):
+                 read_chunk_size=4096,
+                 write_buffer_chunk_size=128 * 1024):
         self.socket = socket
         self.socket.setblocking(False)
         self.io_loop = io_loop or ioloop.IOLoop.instance()
         self.max_buffer_size = max_buffer_size
         self.read_chunk_size = read_chunk_size
+        self._write_buffer_chunk_size = write_buffer_chunk_size
         self.error = None
         self._read_buffer = collections.deque()
         self._write_buffer = collections.deque()
@@ -209,10 +211,9 @@ class IOStream(object):
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
-            WRITE_BUFFER_CHUNK_SIZE = 128 * 1024
-            if len(data) > WRITE_BUFFER_CHUNK_SIZE:
-                for i in range(0, len(data), WRITE_BUFFER_CHUNK_SIZE):
-                    self._write_buffer.append(data[i:i + WRITE_BUFFER_CHUNK_SIZE])
+            if len(data) > self._write_buffer_chunk_size:
+                for i in range(0, len(data), self._write_buffer_chunk_size):
+                    self._write_buffer.append(data[i:i + self._write_buffer_chunk_size])
             else:
                 self._write_buffer.append(data)
         self._write_callback = stack_context.wrap(callback)
@@ -532,7 +533,8 @@ class IOStream(object):
                     # returning the number of bytes it was able to
                     # process.  Therefore we must not call socket.send
                     # with more than 128KB at a time.
-                    _merge_prefix(self._write_buffer, 128 * 1024)
+                    _merge_prefix(self._write_buffer,
+                            self._write_buffer_chunk_size)
                 num_bytes = self.socket.send(self._write_buffer[0])
                 if num_bytes == 0:
                     # With OpenSSL, if we couldn't write the entire buffer,
