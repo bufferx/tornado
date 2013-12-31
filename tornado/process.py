@@ -23,6 +23,8 @@ import logging
 import os
 import sys
 import time
+import ctypes
+import signal
 
 from binascii import hexlify
 
@@ -105,6 +107,10 @@ def fork_processes(num_processes, max_restarts=100):
         pid = os.fork()
         if pid == 0:
             # child process
+            if os.name == 'posix':
+                libc = ctypes.CDLL('libc.so.6')
+                libc.prctl(1, signal.SIGTERM)
+
             _reseed_random()
             global _task_id
             _task_id = i
