@@ -262,7 +262,7 @@ class RequestHandler(object):
     def get_time_summary(self):
         return ' '.join(
                 ['%.3f' % rt for rt in
-                    self.request.request_time(self._start_time)])
+                    self.request.execute_time(self._start_time)])
 
     def set_header(self, name, value):
         """Sets the given response header name and value.
