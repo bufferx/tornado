@@ -441,8 +441,15 @@ class HTTPRequest(object):
         """Reconstructs the full URL for this request."""
         return self.protocol + "://" + self.host + self.uri
 
-    def request_time(self, handler_time):
+    def request_time(self):
         """Returns the amount of time it took for this request to execute."""
+        return self.execute_time()[1]
+
+    def execute_time(self, handler_time=None):
+        """Returns the amount of time it took for this request to execute."""
+        if handler_time is None:
+            handler_time = self._start_time
+
         if self._finish_time is None:
             now = time.time()
             return (now - self.connection._start_time,
