@@ -205,10 +205,18 @@ class IOLoop(object):
         self._waker.close()
         self._impl.close()
 
-    def add_handler(self, fd, handler, events):
+    def add_handler(self, fd, handler, events, op=None):
         """Registers the given handler to receive the given events for fd."""
         self._handlers[fd] = stack_context.wrap(handler)
         self._impl.register(fd, events | self.ERROR)
+
+        if __debug__:
+            _handler_id = id(self._handlers[fd])
+            logging.debug('%s\t%s\t%s\t%s\t%s', self.sequence,
+                    op,
+                    fd,
+                    _handler_id,
+                    fd in self._events)
 
     def update_handler(self, fd, events):
         """Changes the events we listen for fd."""
@@ -216,12 +224,24 @@ class IOLoop(object):
 
     def remove_handler(self, fd):
         """Stop listening for events on fd."""
+        if __debug__:
+            _handler_id = id(self._handlers[fd])
+            logging.debug('%s\t%s\t%s\t%s', self.sequence, fd,
+                    _handler_id,
+                    fd in self._events)
+
         self._handlers.pop(fd, None)
         self._events.pop(fd, None)
         try:
             self._impl.unregister(fd)
         except (OSError, IOError):
             logging.debug("Error deleting fd from IOLoop", exc_info=True)
+
+        if __debug__:
+            logging.debug('%s\t%s\t%s\t%s\t%s', self.sequence, fd,
+                    _handler_id,
+                    fd in self._handlers,
+                    fd in self._events)
 
     def set_blocking_signal_threshold(self, seconds, action):
         """Sends a signal if the ioloop is blocked for more than s seconds.

@@ -83,7 +83,8 @@ class IOStream(object):
     """
     def __init__(self, socket, io_loop=None, max_buffer_size=104857600,
                  read_chunk_size=4096,
-                 write_buffer_chunk_size=128 * 1024):
+                 write_buffer_chunk_size=128 * 1024,
+                 op=None):
         self.socket = socket
         self.socket.setblocking(False)
         self.io_loop = io_loop or ioloop.IOLoop.instance()
@@ -107,6 +108,14 @@ class IOStream(object):
         self._connecting = False
         self._state = None
         self._pending_callbacks = 0
+
+        if __debug__:
+            logging.debug('%s\t%s\t%s\t%s\t%s',
+                    self.io_loop.sequence,
+                    op,
+                    id(self),
+                    self.socket.fileno() if self.socket else '',
+                    self._state)
 
     def connect(self, address, callback=None):
         """Connects the socket to a remote address without blocking.
@@ -229,6 +238,13 @@ class IOStream(object):
 
     def close(self):
         """Close this stream."""
+        if __debug__:
+            logging.debug('%s\t%s\t%s\t%s',
+                    self.io_loop.sequence,
+                    id(self),
+                    self.socket.fileno() if self.socket else '',
+                    self._state)
+
         if self.socket is not None:
             if any(sys.exc_info()):
                 self.error = sys.exc_info()[1]
@@ -367,7 +383,9 @@ class IOStream(object):
             finally:
                 self._pending_callbacks -= 1
         except Exception:
-            logging.warning("error on read", exc_info=True)
+            logging.warning("%s\t%s\terror on read", self.io_loop.sequence,
+                    id(self),
+                    exc_info=True)
             self.close()
             return
         if self._read_from_buffer():
@@ -610,7 +628,8 @@ class IOStream(object):
             self._state = ioloop.IOLoop.ERROR | state
             with stack_context.NullContext():
                 self.io_loop.add_handler(
-                    self.socket.fileno(), self._handle_events, self._state)
+                    self.socket.fileno(), self._handle_events, self._state,
+                    op=self)
         elif not self._state & state:
             self._state = self._state | state
             self.io_loop.update_handler(self.socket.fileno(), self._state)
