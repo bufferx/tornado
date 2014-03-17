@@ -231,7 +231,7 @@ class TCPServer(object):
             if self.ssl_options is not None:
                 stream = SSLIOStream(connection, io_loop=self.io_loop)
             else:
-                stream = IOStream(connection, io_loop=self.io_loop)
+                stream = IOStream(connection, io_loop=self.io_loop, op=self)
             self.handle_stream(stream, address)
         except Exception:
             logging.error("Error in connection callback", exc_info=True)
