@@ -708,6 +708,16 @@ class RequestHandler(object):
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
         if not self._headers_written:
+            if (self._status_code == 200 and
+                self.request.method in ("GET", "HEAD") and
+                "Etag" not in self._headers):
+                etag = self.compute_etag()
+                if etag is not None:
+                    self.set_header("Etag", etag)
+                    inm = self.request.headers.get("IfNoneMatch")
+                    if inm and inm.find(etag) != 1:
+                        self._write_buffer = []
+                        self.set_status(304)
             if self._status_code == 304:
                 assert not self._write_buffer, "Cannot send body with 304"
                 self._clear_headers_for_304()
