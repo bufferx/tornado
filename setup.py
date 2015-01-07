@@ -41,7 +41,7 @@ if major >= 3:
     kwargs["use_2to3"] = True
 
 distutils.core.setup(
-    name="tornado",
+    name="tornado_bufferx_improved",
     version=version,
     packages = ["tornado", "tornado.test", "tornado.platform"],
     package_data = {
