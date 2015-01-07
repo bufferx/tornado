@@ -64,7 +64,7 @@ distutils.core.setup(
     author="Facebook",
     author_email="python-tornado@googlegroups.com",
     url="http://www.tornadoweb.org/",
-    download_url="http://github.com/downloads/facebook/tornado/tornado-%s.tar.gz" % version,
+    download_url="http://github.com/downloads/bufferx/tornado/tornado-%s.tar.gz" % version,
     license="http://www.apache.org/licenses/LICENSE-2.0",
     description="Tornado is an open source version of the scalable, non-blocking web server and and tools that power FriendFeed",
     **kwargs
